@@ -37,29 +37,34 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [detectedObject, setDetectedObject] = useState<DetectedObject | null>(null);
 
-  const handleImageProcessed = (ingredients: string[], suggestedIngredients: string[]) => {
-    console.log('handleImageProcessed called with:', {
-      ingredients,
-      suggestedIngredients
-    });
+  const handleImageProcessed = (detected: string[], suggested: string[]) => {
+    setDetectedObject(null);
     
-    setDetectedIngredients(ingredients);
-    setSuggestedIngredients(suggestedIngredients);
+    if (!detected || detected.length === 0) {
+      setHasUploadedImage(false);
+      setDetectedIngredients([]);
+      setSelectedIngredients([]);
+      setRecipes([]);
+      return;
+    }
+    
+    setDetectedIngredients(detected);
+    setSuggestedIngredients(suggested);
+    setSelectedIngredients(detected); // Start with detected ingredients pre-selected
+    setUploadId(prev => prev + 1);
     setHasUploadedImage(true);
+    setRecipes([]);
     setError(null);
   };
-  
+
   const handleImageUploadError = (error: string, detectedObj?: DetectedObject) => {
-    console.log('handleImageUploadError called with:', {
-      error,
-      detectedObj
-    });
-    
     setError(error);
     setDetectedObject(detectedObj || null);
     setHasUploadedImage(false);
     setDetectedIngredients([]);
     setSuggestedIngredients([]);
+    setSelectedIngredients([]);
+    setRecipes([]);
   };
 
   const toggleIngredient = (ingredient: string) => {

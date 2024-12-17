@@ -1,0 +1,105 @@
+// src/app/api/detect-ingredients/route.ts
+import { NextResponse } from 'next/server';
+import detector from '@/lib/imageProcessing';
+
+export async function POST(request: Request) {
+  console.log('API route called');
+  
+  try {
+    const formData = await request.formData();
+    const image = formData.get('image');
+
+    console.log('Received image:', {
+      type: image instanceof Blob ? image.type : 'not a blob',
+      size: image instanceof Blob ? image.size : 0
+    });
+
+    if (!image || !(image instanceof Blob)) {
+      console.log('Invalid image provided');
+      return NextResponse.json(
+        {
+          error: 'No image provided',
+          isFood: false,
+          ingredients: []
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const buffer = Buffer.from(await image.arrayBuffer());
+      console.log('Processing image buffer of size:', buffer.length);
+
+      // Get detection result
+      const detectionResult = await detector.detectIngredients(buffer);
+      console.log('Raw detection result:', JSON.stringify(detectionResult, null, 2));
+
+      // Find refrigerator detection
+      const fridgeDetection = detectionResult.rawDetections.find(d => {
+        const label = d.label.toLowerCase();
+        const isFridge = label.includes('refrigerator') || 
+                        label.includes('icebox') || 
+                        label.includes('fridge');
+        console.log(`Checking label: ${label}, isFridge: ${isFridge}`);
+        return isFridge;
+      });
+
+      console.log('Fridge detection:', fridgeDetection);
+
+      // If we found a fridge
+      if (fridgeDetection) {
+        console.log('Refrigerator detected, preparing response');
+        const defaultIngredients = detector.getDefaultIngredients();
+        
+        const response = {
+          isFood: true,
+          ingredients: detectionResult.ingredients || [],
+          suggestedIngredients: defaultIngredients,
+          message: "We detected your refrigerator! Here are some common ingredients you might have:",
+          detectedObject: {
+            label: fridgeDetection.label,
+            confidence: fridgeDetection.score
+          }
+        };
+
+        console.log('Sending success response:', JSON.stringify(response, null, 2));
+        return NextResponse.json(response);
+      }
+
+      // No fridge detected
+      console.log('No refrigerator detected, sending error response');
+      return NextResponse.json({
+        error: "Please upload a photo of your refrigerator.",
+        isFood: false,
+        ingredients: [],
+        suggestedIngredients: detector.getDefaultIngredients(),
+        detectedObject: detectionResult.rawDetections[0] || null
+      });
+
+    } catch (error) {
+      console.error('Processing error:', error);
+      return NextResponse.json({
+        error: error instanceof Error ? error.message : 'Failed to process image',
+        isFood: false,
+        ingredients: [],
+        suggestedIngredients: detector.getDefaultIngredients()
+      }, { status: 500 });
+    }
+  } catch (error) {
+    console.error('API route error:', error);
+    return NextResponse.json({
+      error: 'Failed to process request',
+      isFood: false,
+      ingredients: [],
+      suggestedIngredients: detector.getDefaultIngredients()
+    }, { status: 500 });
+  }
+}
+
+// Make sure bodyParser is disabled for file uploads
+export const config = {
+  api: {
+    bodyParser: false,
+    responseLimit: false
+  }
+};
